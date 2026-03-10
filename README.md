@@ -2,7 +2,9 @@
 
 ADI is a local-first Python CLI for safe, repeatable, artifact-driven software development workflows.
 
-This repository currently implements **Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5 + Phase 6 + Phase 7 (multi-repo orchestration)**:
+Start with the getting started guide: [GETTING_STARTED.md](/Users/jpshook/Code/agentic-dev-interface/GETTING_STARTED.md)
+
+This repository currently implements:
 - project bootstrap
 - config loading and merge
 - markdown + YAML frontmatter artifact parsing/writing
@@ -31,8 +33,10 @@ This repository currently implements **Phase 1 + Phase 2 + Phase 3 + Phase 4 + P
 ## Install (editable)
 
 ```bash
-python -m pip install -e .[dev]
+python -m pip install -e '.[dev]'
 ```
+
+If you use `zsh`, keep the quotes around `'.[dev]'` so the shell does not treat it as a glob pattern.
 
 ## CLI
 
