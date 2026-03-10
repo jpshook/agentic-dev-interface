@@ -1,11 +1,13 @@
-"""Task CLI placeholder."""
+"""Task CLI commands."""
 
 from __future__ import annotations
 
 import argparse
+import sys
+from typing import Any
 
-
-TASK_COMMANDS = ["list", "show", "approve", "run", "verify"]
+from adi.engine.yaml_utils import dump_yaml
+from adi.services.task_service import TaskService
 
 
 def register_task_commands(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -13,19 +15,52 @@ def register_task_commands(subparsers: argparse._SubParsersAction[argparse.Argum
     task_subparsers = parser.add_subparsers(dest="task_command")
 
     list_parser = task_subparsers.add_parser("list", help="List tasks")
-    list_parser.add_argument("--repo", required=False)
-    list_parser.set_defaults(handler=_not_implemented)
+    list_parser.add_argument("--repo", required=True, help="Repo id or name")
+    list_parser.set_defaults(handler=_handle_task_list)
 
     show_parser = task_subparsers.add_parser("show", help="Show task")
-    show_parser.add_argument("task_id", nargs="?")
-    show_parser.set_defaults(handler=_not_implemented)
+    show_parser.add_argument("task_id", help="Task id")
+    show_parser.set_defaults(handler=_handle_task_show)
 
-    for command in ["approve", "run", "verify"]:
-        cmd_parser = task_subparsers.add_parser(command, help=f"task {command}")
-        cmd_parser.add_argument("task_id", nargs="?")
-        cmd_parser.set_defaults(handler=_not_implemented)
+    approve_parser = task_subparsers.add_parser("approve", help="Approve task")
+    approve_parser.add_argument("task_id", help="Task id")
+    approve_parser.set_defaults(handler=_handle_task_approve)
+
+    run_parser = task_subparsers.add_parser("run", help="Run task deterministically")
+    run_parser.add_argument("task_id", help="Task id")
+    run_parser.set_defaults(handler=_handle_task_run)
+
+    verify_parser = task_subparsers.add_parser("verify", help="Verify task")
+    verify_parser.add_argument("task_id", help="Task id")
+    verify_parser.set_defaults(handler=_handle_task_verify)
 
 
-def _not_implemented(_: argparse.Namespace) -> int:
-    print("Task commands are not implemented in Phase 1-2")
-    return 1
+def _handle_task_list(args: argparse.Namespace) -> int:
+    return _run_with_errors(lambda service: service.list_tasks(args.repo))
+
+
+def _handle_task_show(args: argparse.Namespace) -> int:
+    return _run_with_errors(lambda service: service.show_task(args.task_id))
+
+
+def _handle_task_approve(args: argparse.Namespace) -> int:
+    return _run_with_errors(lambda service: service.approve_task(args.task_id))
+
+
+def _handle_task_run(args: argparse.Namespace) -> int:
+    return _run_with_errors(lambda service: service.run_task(args.task_id))
+
+
+def _handle_task_verify(args: argparse.Namespace) -> int:
+    return _run_with_errors(lambda service: service.verify_task(args.task_id))
+
+
+def _run_with_errors(fn: Any) -> int:
+    service = TaskService()
+    try:
+        payload = fn(service)
+        print(dump_yaml(payload))
+        return 0
+    except (RuntimeError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1

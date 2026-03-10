@@ -2,13 +2,16 @@
 
 ADI is a local-first Python CLI for safe, repeatable, artifact-driven software development workflows.
 
-This repository currently implements **Phase 1 + Phase 2** of the v1 spec:
+This repository currently implements **Phase 1 + Phase 2 + Phase 3 (deterministic task execution)**:
 - project bootstrap
 - config loading and merge
 - markdown + YAML frontmatter artifact parsing/writing
 - artifact store
 - repo onboarding and deterministic exploration
 - `adi repo init/explore/info/doctor`
+- task lifecycle validation and transitions
+- deterministic task execution pipeline with locks, worktrees, verification, and run artifacts
+- `adi task list/show/approve/run/verify`
 
 ## Requirements
 
@@ -28,9 +31,14 @@ adi repo init --path /absolute/path/to/repo
 adi repo explore --repo <repo-id-or-name>
 adi repo info --repo <repo-id-or-name>
 adi repo doctor --repo <repo-id-or-name>
+adi task list --repo <repo-id-or-name>
+adi task show <task-id>
+adi task approve <task-id>
+adi task run <task-id>
+adi task verify <task-id>
 ```
 
-`spec`, `task`, and `backlog` command groups are scaffolded and intentionally stubbed in this slice.
+`spec` and `backlog` command groups remain scaffolded stubs in this slice.
 
 ## ADI Home Layout
 
@@ -102,4 +110,6 @@ pytest
 
 - Frontmatter round-tripping preserves unknown fields.
 - Repo detection is deterministic and currently supports Node/TypeScript, Python, Go, and Rust.
-- Policies/verifier/worktree/agent runner are scaffolded and will be expanded in later phases.
+- Task execution is deterministic and model-free in this phase.
+- Run outputs are recorded under `~/.adi/runs/<run-id>/` for debugging/auditability.
+- Agent/model execution remains out of scope for now.

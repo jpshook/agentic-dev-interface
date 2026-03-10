@@ -1,0 +1,8 @@
+results:
+  -
+    check: test
+    command: pytest -q
+    returncode: 0
+    stdout: "1 passed in 0.02s\n"
+    stderr: ''
+all_passed: true

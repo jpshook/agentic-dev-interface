@@ -1,0 +1,17 @@
+run_id: '20260310T001200Z-run-demo-repo-TK-001-ab12cd'
+task_id: TK-001
+repo_id: demo-repo
+mode: run
+status: completed
+created_at: '2026-03-10T00:12:00+00:00'
+finished_at: '2026-03-10T00:12:05+00:00'
+policy:
+  action: auto_execute
+  reasons:
+    - Task is within automatic execution thresholds
+  metadata:
+    risk: low
+    size: small
+worktree:
+  path: /Users/example/agent-worktrees/demo-repo/TK-001
+  branch: adi/TK-001
