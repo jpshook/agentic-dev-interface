@@ -24,6 +24,8 @@ DEFAULT_ADI_CONFIG: dict[str, Any] = {
         "default_timeout_seconds": 1200,
         "verification_fix_cycles": 2,
         "total_task_attempts": 3,
+        "max_active_runs_global": 2,
+        "max_active_runs_per_repo": 2,
     },
     "verification": {
         "default_checks": ["test", "lint", "typecheck", "build"],

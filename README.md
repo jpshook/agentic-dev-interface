@@ -2,7 +2,7 @@
 
 ADI is a local-first Python CLI for safe, repeatable, artifact-driven software development workflows.
 
-This repository currently implements **Phase 1 + Phase 2 + Phase 3 + Phase 4 (agent-assisted task execution)**:
+This repository currently implements **Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5 (backlog orchestration)**:
 - project bootstrap
 - config loading and merge
 - markdown + YAML frontmatter artifact parsing/writing
@@ -14,6 +14,8 @@ This repository currently implements **Phase 1 + Phase 2 + Phase 3 + Phase 4 (ag
 - prompt generation and model-agnostic agent runner integration
 - implementer retry loop (`verification_fix_cycles` / `total_task_attempts`)
 - `adi task list/show/approve/run/verify`
+- backlog scheduling, ranking, dependency gating, and worker dispatch
+- `adi backlog show/run`
 
 ## Requirements
 
@@ -38,6 +40,8 @@ adi task show <task-id>
 adi task approve <task-id>
 adi task run <task-id>
 adi task verify <task-id>
+adi backlog show --repo <repo-id-or-name>
+adi backlog run --repo <repo-id-or-name>
 ```
 
 `spec` and `backlog` command groups remain scaffolded stubs in this slice.
@@ -59,6 +63,21 @@ Prompt templates live at:
 - `/Users/jpshook/Code/agentic-dev-interface/src/adi/templates/prompts/reviewer.md`
 
 Override prompts by placing templates in `~/.adi/templates/prompts/`.
+
+## Backlog Orchestration (Phase 5)
+
+`adi backlog run` orchestrates repository tasks by:
+
+1. loading tasks from `~/.adi/repos/<repo>/tasks`
+2. filtering eligible tasks (`approved`, dependencies satisfied, policy `auto_execute`)
+3. ranking with deterministic heuristics (priority, size, dependency count, creation time)
+4. dispatching tasks through a worker pool
+5. running each task via the Phase 4 task execution loop
+6. writing backlog run summary artifacts under `~/.adi/runs/<run-id>/`
+
+Concurrency controls are configured in `adi.yaml`:
+- `execution.max_active_runs_global`
+- `execution.max_active_runs_per_repo`
 
 ## ADI Home Layout
 
