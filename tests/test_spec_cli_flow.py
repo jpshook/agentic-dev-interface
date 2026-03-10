@@ -65,6 +65,9 @@ def test_spec_cli_analyze_decompose_approve_status(tmp_path: Path, monkeypatch, 
     assert main(["spec", "analyze", "SP-001"]) == 0
     analyze = load_yaml(capsys.readouterr().out)
     assert analyze["status"] == "analyzed"
+    assert "implementation_scope" in analyze["analysis"]
+    assert "system_components" in analyze["analysis"]
+    assert "task_boundaries" in analyze["analysis"]
 
     assert main(["spec", "decompose", "SP-001"]) == 0
     decompose = load_yaml(capsys.readouterr().out)
@@ -159,3 +162,165 @@ def test_spec_run_auto_safe_hands_off_to_backlog(tmp_path: Path, monkeypatch, ca
     status = load_yaml(capsys.readouterr().out)
     assert status["linked_tasks"]["count"] >= 1
     assert status["spec"]["status"] in {"in_progress", "completed", "blocked"}
+
+
+def test_spec_run_stops_on_unresolved_ambiguity(tmp_path: Path, monkeypatch, capsys) -> None:
+    adi_home = tmp_path / ".adi-home"
+    monkeypatch.setenv("ADI_HOME", str(adi_home))
+
+    repo_path = tmp_path / "AmbiguousRepo"
+    _init_git_repo(repo_path)
+
+    assert main(["repo", "init", "--path", str(repo_path)]) == 0
+    repo_id = load_yaml(capsys.readouterr().out)["repo"]["id"]
+
+    assert main(["repo", "explore", "--repo", repo_id]) == 0
+    capsys.readouterr()
+
+    store = ArtifactStore()
+    repo_md_path = adi_home / "repos" / repo_id / "repo.md"
+    store.update(repo_md_path, frontmatter_updates={"commands": {"test": "python3 -c 'print(1)'"}})
+
+    assert (
+        main(
+            [
+                "spec",
+                "create",
+                "--repo",
+                repo_id,
+                "--title",
+                "Ambiguous spec",
+                "--id",
+                "SP-AMB",
+                "--execution-mode",
+                "auto_safe",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    spec_path = adi_home / "repos" / repo_id / "specs" / "SP-AMB.md"
+    doc = store.read(spec_path)
+    doc.body += "\n## Open Questions\n\n- TBD: choose validation error format?\n"
+    store.write(spec_path, doc)
+
+    assert main(["spec", "run", "SP-AMB"]) == 0
+    payload = load_yaml(capsys.readouterr().out)
+    assert payload["backlog_started"] is False
+    assert payload["requires_human_input"] is True
+    assert any("ambiguities" in reason.lower() for reason in payload["safety_reasons"])
+
+
+def test_spec_run_stops_when_generated_tasks_are_high_risk(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    adi_home = tmp_path / ".adi-home"
+    monkeypatch.setenv("ADI_HOME", str(adi_home))
+
+    repo_path = tmp_path / "RiskRepo"
+    _init_git_repo(repo_path)
+
+    assert main(["repo", "init", "--path", str(repo_path)]) == 0
+    repo_id = load_yaml(capsys.readouterr().out)["repo"]["id"]
+
+    loader = ConfigLoader(adi_home=adi_home)
+    loader.ensure_initialized()
+    (loader.config_dir / "adi.yaml").write_text(
+        dump_yaml(
+            {
+                "execution": {
+                    "worktree_root": str(tmp_path / "worktrees"),
+                    "default_timeout_seconds": 120,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert main(["repo", "explore", "--repo", repo_id]) == 0
+    capsys.readouterr()
+
+    store = ArtifactStore()
+    repo_md_path = adi_home / "repos" / repo_id / "repo.md"
+    store.update(repo_md_path, frontmatter_updates={"commands": {"test": "python3 -c 'print(1)'"}})
+
+    assert (
+        main(
+            [
+                "spec",
+                "create",
+                "--repo",
+                repo_id,
+                "--title",
+                "High risk spec",
+                "--id",
+                "SP-RISK",
+                "--execution-mode",
+                "auto_safe",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    spec_path = adi_home / "repos" / repo_id / "specs" / "SP-RISK.md"
+    doc = store.read(spec_path)
+    doc.body += "\n## Acceptance Criteria\n\n- Update auth permission model for bulk import\n"
+    store.write(spec_path, doc)
+
+    assert main(["spec", "run", "SP-RISK"]) == 0
+    payload = load_yaml(capsys.readouterr().out)
+    assert payload["backlog_started"] is False
+    assert payload["requires_human_input"] is True
+    assert any("high risk" in reason.lower() for reason in payload["safety_reasons"])
+
+
+def test_spec_run_stops_when_policy_requires_manual_approval(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    adi_home = tmp_path / ".adi-home"
+    monkeypatch.setenv("ADI_HOME", str(adi_home))
+
+    repo_path = tmp_path / "PolicyRepo"
+    _init_git_repo(repo_path)
+
+    assert main(["repo", "init", "--path", str(repo_path)]) == 0
+    repo_id = load_yaml(capsys.readouterr().out)["repo"]["id"]
+
+    assert main(["repo", "explore", "--repo", repo_id]) == 0
+    capsys.readouterr()
+
+    store = ArtifactStore()
+    repo_md_path = adi_home / "repos" / repo_id / "repo.md"
+    store.update(repo_md_path, frontmatter_updates={"commands": {"test": "python3 -c 'print(1)'"}})
+
+    assert (
+        main(
+            [
+                "spec",
+                "create",
+                "--repo",
+                repo_id,
+                "--title",
+                "Policy gate spec",
+                "--id",
+                "SP-POLICY",
+                "--execution-mode",
+                "auto_safe",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    spec_path = adi_home / "repos" / repo_id / "specs" / "SP-POLICY.md"
+    doc = store.read(spec_path)
+    doc.body += "\n## Acceptance Criteria\n\n- Add data consistency checks for imports\n"
+    store.write(spec_path, doc)
+
+    assert main(["spec", "run", "SP-POLICY"]) == 0
+    payload = load_yaml(capsys.readouterr().out)
+    assert payload["backlog_started"] is False
+    assert payload["requires_human_input"] is True
+    assert any("manual decision" in reason.lower() for reason in payload["safety_reasons"])

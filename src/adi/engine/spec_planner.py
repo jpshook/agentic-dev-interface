@@ -31,6 +31,9 @@ class SpecAnalysis:
             "ambiguities": self.ambiguities,
             "likely_areas": self.likely_areas,
             "intent_summary": self.intent_summary,
+            "implementation_scope": self.likely_areas,
+            "system_components": self.likely_areas,
+            "task_boundaries": self.acceptance_criteria or self.goals,
         }
 
 

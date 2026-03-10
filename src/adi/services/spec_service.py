@@ -11,6 +11,7 @@ from adi.engine.artifact_store import ArtifactDocument, ArtifactStore
 from adi.engine.config_loader import ConfigLoader
 from adi.engine.run_manager import RunManager
 from adi.engine.spec_planner import SpecAnalysis, SpecPlanner
+from adi.engine.policy_evaluator import PolicyEvaluator
 from adi.models.spec import (
     SPEC_EXECUTION_MODES,
     SpecArtifact,
@@ -30,11 +31,13 @@ class SpecService:
         artifact_store: ArtifactStore | None = None,
         planner: SpecPlanner | None = None,
         backlog_service: BacklogService | None = None,
+        policy_evaluator: PolicyEvaluator | None = None,
     ) -> None:
         self.config_loader = config_loader or ConfigLoader()
         self.artifact_store = artifact_store or ArtifactStore()
         self.planner = planner or SpecPlanner()
         self.backlog_service = backlog_service or BacklogService(config_loader=self.config_loader)
+        self.policy_evaluator = policy_evaluator or PolicyEvaluator()
 
     def create_spec(
         self,
@@ -213,6 +216,9 @@ class SpecService:
                 "status": "decomposed",
                 "updated_at": self._utc_now(),
                 "decomposed_task_ids": [task["id"] for task in created_tasks],
+                "generated_high_risk_count": len(
+                    [task for task in created_tasks if str(task.get("risk", "")) == "high"]
+                ),
                 "last_decomposed_at": self._utc_now(),
             },
             body=updated_body,
@@ -329,6 +335,7 @@ class SpecService:
                 "execution_mode": spec.execution_mode,
                 "actions": actions,
                 "backlog_started": False,
+                "requires_human_input": False,
                 "message": "Manual mode: analysis/decomposition completed without execution",
             }
 
@@ -339,7 +346,26 @@ class SpecService:
                 "execution_mode": spec.execution_mode,
                 "actions": actions,
                 "backlog_started": False,
+                "requires_human_input": False,
                 "message": "Spec requires approval before execution",
+            }
+
+        linked_before = self._linked_tasks(spec.id)
+        safety_check = self._spec_execution_safety_check(
+            spec_record=record,
+            spec=spec,
+            linked_tasks=linked_before,
+        )
+        if not safety_check["ok"]:
+            return {
+                "spec_id": spec.id,
+                "status": spec.status,
+                "execution_mode": spec.execution_mode,
+                "actions": actions,
+                "backlog_started": False,
+                "requires_human_input": True,
+                "safety_reasons": safety_check["reasons"],
+                "message": "Execution paused pending human input",
             }
 
         if spec.execution_mode == "auto_safe" and spec.status == "decomposed":
@@ -389,6 +415,7 @@ class SpecService:
             "execution_mode": latest_spec.execution_mode,
             "actions": actions,
             "backlog_started": True,
+            "requires_human_input": False,
             "backlog_run": backlog_result["backlog_run"],
         }
 
@@ -572,6 +599,7 @@ class SpecService:
         return (
             f"# Spec Analysis {spec_id}\n\n"
             f"- Intent: {analysis.intent_summary}\n"
+            f"- Implementation scope: {', '.join(analysis.likely_areas)}\n"
             f"- Goals: {len(analysis.goals)}\n"
             f"- Constraints: {len(analysis.constraints)}\n"
             f"- Acceptance criteria: {len(analysis.acceptance_criteria)}\n"
@@ -594,3 +622,82 @@ class SpecService:
 
     def _utc_now(self) -> str:
         return datetime.now(UTC).replace(microsecond=0).isoformat()
+
+    def _spec_execution_safety_check(
+        self,
+        *,
+        spec_record: dict[str, Any],
+        spec: SpecArtifact,
+        linked_tasks: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        reasons: list[str] = []
+
+        ambiguity_count = int(spec_record["document"].frontmatter.get("ambiguity_count", 0))
+        if ambiguity_count > 0:
+            reasons.append(f"Spec has unresolved ambiguities ({ambiguity_count})")
+
+        if not linked_tasks:
+            reasons.append("Spec has no generated tasks")
+            return {"ok": False, "reasons": reasons}
+
+        effective = self.config_loader.load_effective_config(repo_id=spec.repo_id)
+        policy_cfg = effective.get("policies", {}).get("policy", {})
+        auto_cfg = policy_cfg.get("auto_execute", {})
+        restricted_areas = [str(item).lower() for item in policy_cfg.get("restricted_areas", [])]
+
+        for item in linked_tasks:
+            frontmatter = item["document"].frontmatter
+            task_id = str(frontmatter.get("id", ""))
+            title = str(frontmatter.get("title", ""))
+            size = str(frontmatter.get("size", "small"))
+            risk = str(frontmatter.get("risk", "low"))
+
+            if risk == "high":
+                reasons.append(f"Task {task_id} is high risk")
+
+            touches_restricted = self._task_touches_restricted_area(frontmatter, restricted_areas)
+            if touches_restricted:
+                reasons.append(f"Task {task_id} touches protected area")
+
+            decision = self.policy_evaluator.evaluate(
+                risk=risk,
+                size=size,
+                dependencies_satisfied=True,
+                touches_restricted_area=touches_restricted,
+                auto_max_risk=str(auto_cfg.get("max_risk", "low")),
+                auto_max_size=str(auto_cfg.get("max_size", "small")),
+            )
+            if decision.action != "auto_execute":
+                reasons.append(
+                    f"Task {task_id} requires manual decision ({decision.action})"
+                )
+
+            if not title:
+                reasons.append(f"Task {task_id} is missing title")
+
+        deduped = []
+        seen: set[str] = set()
+        for reason in reasons:
+            if reason in seen:
+                continue
+            seen.add(reason)
+            deduped.append(reason)
+        return {"ok": not deduped, "reasons": deduped}
+
+    def _task_touches_restricted_area(
+        self,
+        frontmatter: dict[str, Any],
+        restricted_areas: list[str],
+    ) -> bool:
+        title = str(frontmatter.get("title", "")).lower()
+        labels: list[str] = []
+        for key in ["labels", "tags"]:
+            value = frontmatter.get(key, [])
+            if isinstance(value, list):
+                labels.extend(str(item).lower() for item in value)
+        for area in restricted_areas:
+            if area in title:
+                return True
+            if area in labels:
+                return True
+        return False
