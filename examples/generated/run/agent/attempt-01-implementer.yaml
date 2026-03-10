@@ -1,0 +1,8 @@
+role: implementer
+runtime: shell
+success: true
+returncode: 0
+command: sh implement.sh 1
+response: "Implemented requested changes"
+stdout: "Implemented requested changes\n"
+stderr: ''

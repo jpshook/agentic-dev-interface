@@ -22,6 +22,8 @@ DEFAULT_ADI_CONFIG: dict[str, Any] = {
     "execution": {
         "worktree_root": str(DEFAULT_WORKTREE_ROOT),
         "default_timeout_seconds": 1200,
+        "verification_fix_cycles": 2,
+        "total_task_attempts": 3,
     },
     "verification": {
         "default_checks": ["test", "lint", "typecheck", "build"],
@@ -49,8 +51,15 @@ DEFAULT_POLICIES_CONFIG: dict[str, Any] = {
 
 DEFAULT_MODELS_CONFIG: dict[str, Any] = {
     "models": {
-        "implementer": "stub",
-        "reviewer": "stub",
+        "implementer": {
+            "runtime": "stub",
+        },
+        "reviewer": {
+            "runtime": "stub",
+        },
+        "verifier": {
+            "runtime": "stub",
+        },
     }
 }
 

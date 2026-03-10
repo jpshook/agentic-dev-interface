@@ -2,7 +2,7 @@
 
 ADI is a local-first Python CLI for safe, repeatable, artifact-driven software development workflows.
 
-This repository currently implements **Phase 1 + Phase 2 + Phase 3 (deterministic task execution)**:
+This repository currently implements **Phase 1 + Phase 2 + Phase 3 + Phase 4 (agent-assisted task execution)**:
 - project bootstrap
 - config loading and merge
 - markdown + YAML frontmatter artifact parsing/writing
@@ -11,6 +11,8 @@ This repository currently implements **Phase 1 + Phase 2 + Phase 3 (deterministi
 - `adi repo init/explore/info/doctor`
 - task lifecycle validation and transitions
 - deterministic task execution pipeline with locks, worktrees, verification, and run artifacts
+- prompt generation and model-agnostic agent runner integration
+- implementer retry loop (`verification_fix_cycles` / `total_task_attempts`)
 - `adi task list/show/approve/run/verify`
 
 ## Requirements
@@ -39,6 +41,24 @@ adi task verify <task-id>
 ```
 
 `spec` and `backlog` command groups remain scaffolded stubs in this slice.
+
+## Agent Runtime (Phase 4)
+
+`adi task run <task-id>` now executes:
+
+1. policy + state checks
+2. worktree creation
+3. implementer prompt generation
+4. agent execution (stub or shell runtime)
+5. verification checks
+6. retry loop on failed verification
+7. run artifact recording + task state update
+
+Prompt templates live at:
+- `/Users/jpshook/Code/agentic-dev-interface/src/adi/templates/prompts/implementer.md`
+- `/Users/jpshook/Code/agentic-dev-interface/src/adi/templates/prompts/reviewer.md`
+
+Override prompts by placing templates in `~/.adi/templates/prompts/`.
 
 ## ADI Home Layout
 
@@ -110,6 +130,7 @@ pytest
 
 - Frontmatter round-tripping preserves unknown fields.
 - Repo detection is deterministic and currently supports Node/TypeScript, Python, Go, and Rust.
-- Task execution is deterministic and model-free in this phase.
+- Task execution remains deterministic and policy-gated.
+- Agent-assisted implementation is now supported through a model-agnostic runner.
 - Run outputs are recorded under `~/.adi/runs/<run-id>/` for debugging/auditability.
-- Agent/model execution remains out of scope for now.
+- Default model runtime is `stub`; configure `models.yaml` with `runtime: shell` and `command` for active implementation behavior.

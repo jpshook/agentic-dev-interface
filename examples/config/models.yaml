@@ -1,3 +1,7 @@
 models:
-  implementer: stub
-  reviewer: stub
+  implementer:
+    runtime: stub
+  reviewer:
+    runtime: stub
+  verifier:
+    runtime: stub

@@ -15,3 +15,10 @@ policy:
 worktree:
   path: /Users/example/agent-worktrees/demo-repo/TK-001
   branch: adi/TK-001
+attempts:
+  -
+    attempt: 1
+    agent_success: true
+    verification_passed: true
+    reason: ok
+failure_reason: ''

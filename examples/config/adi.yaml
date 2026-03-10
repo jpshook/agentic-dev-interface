@@ -3,6 +3,8 @@ artifact:
 execution:
   worktree_root: ~/agent-worktrees
   default_timeout_seconds: 1200
+  verification_fix_cycles: 2
+  total_task_attempts: 3
 verification:
   default_checks:
     - test
