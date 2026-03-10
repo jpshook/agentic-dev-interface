@@ -114,6 +114,7 @@ class BacklogService:
         repo_ref: str | None = None,
         max_tasks: int | None = None,
         time_limit_seconds: int | None = None,
+        include_task_ids: set[str] | None = None,
     ) -> dict[str, Any]:
         repo = self._resolve_repo(repo_ref)
         repo_id = str(repo["id"])
@@ -178,6 +179,10 @@ class BacklogService:
                     capacity = max_parallel - len(active)
                     if capacity > 0:
                         eligible = self._eligible_tasks(repo_id, running_task_ids=set(active.values()))
+                        if include_task_ids is not None:
+                            eligible = [
+                                task for task in eligible if str(task.get("id", "")) in include_task_ids
+                            ]
                         if requested_max_tasks is not None:
                             remaining = max(0, requested_max_tasks - dispatched)
                         else:
@@ -208,7 +213,12 @@ class BacklogService:
                     stop_reason = "max_tasks_executed"
                     break
 
-                if not self._eligible_tasks(repo_id, running_task_ids=set()):
+                remaining_eligible = self._eligible_tasks(repo_id, running_task_ids=set())
+                if include_task_ids is not None:
+                    remaining_eligible = [
+                        task for task in remaining_eligible if str(task.get("id", "")) in include_task_ids
+                    ]
+                if not remaining_eligible:
                     stop_reason = "no_eligible_tasks"
                     break
 

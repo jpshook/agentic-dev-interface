@@ -2,7 +2,7 @@
 
 ADI is a local-first Python CLI for safe, repeatable, artifact-driven software development workflows.
 
-This repository currently implements **Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5 (backlog orchestration)**:
+This repository currently implements **Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5 + Phase 6 (spec-to-task generation)**:
 - project bootstrap
 - config loading and merge
 - markdown + YAML frontmatter artifact parsing/writing
@@ -16,6 +16,9 @@ This repository currently implements **Phase 1 + Phase 2 + Phase 3 + Phase 4 + P
 - `adi task list/show/approve/run/verify`
 - backlog scheduling, ranking, dependency gating, and worker dispatch
 - `adi backlog show/run`
+- spec lifecycle analysis/decomposition/approval/run/status workflows
+- deterministic spec-to-task planning with dependency graph generation
+- `adi spec create/analyze/decompose/approve/run/status`
 
 ## Requirements
 
@@ -42,9 +45,13 @@ adi task run <task-id>
 adi task verify <task-id>
 adi backlog show --repo <repo-id-or-name>
 adi backlog run --repo <repo-id-or-name>
+adi spec create --repo <repo-id-or-name> --title "<title>" [--execution-mode manual|approval_required|auto_safe]
+adi spec analyze <spec-id>
+adi spec decompose <spec-id>
+adi spec approve <spec-id>
+adi spec status <spec-id>
+adi spec run <spec-id>
 ```
-
-`spec` and `backlog` command groups remain scaffolded stubs in this slice.
 
 ## Agent Runtime (Phase 4)
 
@@ -78,6 +85,20 @@ Override prompts by placing templates in `~/.adi/templates/prompts/`.
 Concurrency controls are configured in `adi.yaml`:
 - `execution.max_active_runs_global`
 - `execution.max_active_runs_per_repo`
+
+## Spec Planning (Phase 6)
+
+`adi spec run <spec-id>` supports:
+
+1. spec analysis (`draft -> analyzed`)
+2. deterministic decomposition (`analyzed -> decomposed`)
+3. task artifact generation with dependencies and acceptance checks
+4. approval + backlog handoff based on execution mode
+
+Execution modes:
+- `manual`: analyze/decompose only
+- `approval_required`: requires explicit `adi spec approve` before execution
+- `auto_safe`: auto-approve generated tasks and hand off to backlog execution
 
 ## ADI Home Layout
 
