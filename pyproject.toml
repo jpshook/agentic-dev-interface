@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling>=1.24.2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "adi"
+version = "0.1.0"
+description = "Agentic Dev Interface"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "ADI" }
+]
+dependencies = [
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+]
+
+[project.scripts]
+adi = "adi.cli.main:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+addopts = "-q"
+testpaths = ["tests"]

@@ -1,0 +1,13 @@
+policy:
+  default_action: require_approval
+  auto_execute:
+    max_size: small
+    max_risk: low
+  restricted_areas:
+    - auth
+    - billing
+    - migrations
+    - infra
+    - deployment
+    - secrets
+    - production

@@ -1,0 +1,11 @@
+artifact:
+  templates_dir: templates
+execution:
+  worktree_root: ~/agent-worktrees
+  default_timeout_seconds: 1200
+verification:
+  default_checks:
+    - test
+    - lint
+    - typecheck
+    - build
