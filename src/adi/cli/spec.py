@@ -43,6 +43,10 @@ def register_spec_commands(subparsers: argparse._SubParsersAction[argparse.Argum
     status_parser.add_argument("spec_id", help="Spec id")
     status_parser.set_defaults(handler=_handle_spec_status)
 
+    repos_parser = spec_subparsers.add_parser("repos", help="Show repositories affected by spec")
+    repos_parser.add_argument("spec_id", help="Spec id")
+    repos_parser.set_defaults(handler=_handle_spec_repos)
+
 
 def _handle_spec_create(args: argparse.Namespace) -> int:
     service = SpecService()
@@ -86,6 +90,11 @@ def _handle_spec_run(args: argparse.Namespace) -> int:
 def _handle_spec_status(args: argparse.Namespace) -> int:
     service = SpecService()
     return _run_with_errors(lambda: service.spec_status(args.spec_id))
+
+
+def _handle_spec_repos(args: argparse.Namespace) -> int:
+    service = SpecService()
+    return _run_with_errors(lambda: service.spec_repos(args.spec_id))
 
 
 def _run_with_errors(fn):

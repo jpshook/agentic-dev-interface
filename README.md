@@ -2,7 +2,7 @@
 
 ADI is a local-first Python CLI for safe, repeatable, artifact-driven software development workflows.
 
-This repository currently implements **Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5 + Phase 6 (spec-to-task generation)**:
+This repository currently implements **Phase 1 + Phase 2 + Phase 3 + Phase 4 + Phase 5 + Phase 6 + Phase 7 (multi-repo orchestration)**:
 - project bootstrap
 - config loading and merge
 - markdown + YAML frontmatter artifact parsing/writing
@@ -18,7 +18,10 @@ This repository currently implements **Phase 1 + Phase 2 + Phase 3 + Phase 4 + P
 - `adi backlog show/run`
 - spec lifecycle analysis/decomposition/approval/run/status workflows
 - deterministic spec-to-task planning with dependency graph generation
-- `adi spec create/analyze/decompose/approve/run/status`
+- cross-repo orchestration with dependency-aware dispatch
+- `adi spec create/analyze/decompose/approve/run/status/repos`
+- `adi repos list`
+- `adi system status`
 
 ## Requirements
 
@@ -38,6 +41,7 @@ adi repo init --path /absolute/path/to/repo
 adi repo explore --repo <repo-id-or-name>
 adi repo info --repo <repo-id-or-name>
 adi repo doctor --repo <repo-id-or-name>
+adi repos list
 adi task list --repo <repo-id-or-name>
 adi task show <task-id>
 adi task approve <task-id>
@@ -50,7 +54,9 @@ adi spec analyze <spec-id>
 adi spec decompose <spec-id>
 adi spec approve <spec-id>
 adi spec status <spec-id>
+adi spec repos <spec-id>
 adi spec run <spec-id>
+adi system status
 ```
 
 ## Agent Runtime (Phase 4)
@@ -86,7 +92,7 @@ Concurrency controls are configured in `adi.yaml`:
 - `execution.max_active_runs_global`
 - `execution.max_active_runs_per_repo`
 
-## Spec Planning (Phase 6)
+## Spec Planning + Orchestration (Phase 6-7)
 
 `adi spec run <spec-id>` supports:
 
@@ -94,6 +100,7 @@ Concurrency controls are configured in `adi.yaml`:
 2. deterministic decomposition (`analyzed -> decomposed`)
 3. task artifact generation with dependencies and acceptance checks
 4. approval + backlog handoff based on execution mode
+5. multi-repo orchestration with cross-repo dependency ordering
 
 Execution modes:
 - `manual`: analyze/decompose only

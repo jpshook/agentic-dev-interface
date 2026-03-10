@@ -157,6 +157,7 @@ def test_spec_run_auto_safe_hands_off_to_backlog(tmp_path: Path, monkeypatch, ca
     assert run_payload["backlog_started"] is True
     assert run_payload["status"] in {"in_progress", "completed"}
     assert run_payload["backlog_run"]["dispatched_tasks"] >= 1
+    assert run_payload["orchestration"]["dispatched_tasks"] >= 1
 
     assert main(["spec", "status", "SP-002"]) == 0
     status = load_yaml(capsys.readouterr().out)
@@ -324,3 +325,60 @@ def test_spec_run_stops_when_policy_requires_manual_approval(
     assert payload["backlog_started"] is False
     assert payload["requires_human_input"] is True
     assert any("manual decision" in reason.lower() for reason in payload["safety_reasons"])
+
+
+def test_spec_repos_lists_detected_affected_repos(tmp_path: Path, monkeypatch, capsys) -> None:
+    adi_home = tmp_path / ".adi-home"
+    monkeypatch.setenv("ADI_HOME", str(adi_home))
+
+    web_repo = tmp_path / "web-app"
+    api_repo = tmp_path / "api-service"
+    _init_git_repo(web_repo)
+    _init_git_repo(api_repo)
+
+    assert main(["repo", "init", "--path", str(web_repo)]) == 0
+    web_id = load_yaml(capsys.readouterr().out)["repo"]["id"]
+    assert main(["repo", "init", "--path", str(api_repo)]) == 0
+    api_id = load_yaml(capsys.readouterr().out)["repo"]["id"]
+
+    assert main(["repo", "explore", "--repo", web_id]) == 0
+    capsys.readouterr()
+    assert main(["repo", "explore", "--repo", api_id]) == 0
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "spec",
+                "create",
+                "--repo",
+                web_id,
+                "--title",
+                "Cross repo import",
+                "--id",
+                "SP-XREPO",
+                "--execution-mode",
+                "manual",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    store = ArtifactStore()
+    spec_path = adi_home / "repos" / web_id / "specs" / "SP-XREPO.md"
+    doc = store.read(spec_path)
+    doc.body += (
+        "\n## Acceptance Criteria\n\n"
+        f"- Add upload UI in {web_id}\n"
+        f"- Add endpoint in {api_id}\n"
+    )
+    store.write(spec_path, doc)
+
+    assert main(["spec", "analyze", "SP-XREPO"]) == 0
+    capsys.readouterr()
+
+    assert main(["spec", "repos", "SP-XREPO"]) == 0
+    repos_payload = load_yaml(capsys.readouterr().out)
+    assert web_id in repos_payload["affected_repos"]
+    assert api_id in repos_payload["affected_repos"]
