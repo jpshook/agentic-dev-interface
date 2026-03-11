@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from tempfile import TemporaryDirectory
 from pathlib import Path
 from typing import Any
 
 from adi.engine.artifact_store import ArtifactStore
+from adi.engine.agent_runner import AgentRunner
 from adi.engine.config_loader import ConfigLoader
 
 
@@ -16,9 +18,11 @@ class SystemService:
         self,
         config_loader: ConfigLoader | None = None,
         artifact_store: ArtifactStore | None = None,
+        agent_runner: AgentRunner | None = None,
     ) -> None:
         self.config_loader = config_loader or ConfigLoader()
         self.artifact_store = artifact_store or ArtifactStore()
+        self.agent_runner = agent_runner or AgentRunner(config_loader=self.config_loader)
 
     def status(self) -> dict[str, Any]:
         repos = self.config_loader.load_repos_registry()
@@ -76,3 +80,56 @@ class SystemService:
                 "total": runs_total,
             },
         }
+
+    def check_model(self, *, role: str = "implementer", repo_id: str | None = None) -> dict[str, Any]:
+        config = self.config_loader.load_effective_config(repo_id=repo_id)
+        models_root = config.get("models", {})
+        role_config = self.agent_runner._role_config(repo_id=repo_id or "", role=role)
+        runtime = str(role_config.get("runtime", "stub"))
+
+        payload: dict[str, Any] = {
+            "role": role,
+            "repo_id": repo_id,
+            "runtime": runtime,
+            "configured": isinstance(models_root, dict),
+        }
+
+        if runtime == "stub":
+            payload.update(
+                {
+                    "ready": False,
+                    "success": True,
+                    "message": "Stub runtime is configured. ADI is installed, but no real model command is set.",
+                }
+            )
+            return payload
+
+        with TemporaryDirectory(prefix="adi-model-check-") as temp_dir:
+            root = Path(temp_dir)
+            run_dir = root / "run"
+            worktree_path = root / "worktree"
+            run_dir.mkdir(parents=True, exist_ok=True)
+            worktree_path.mkdir(parents=True, exist_ok=True)
+
+            result = self.agent_runner.run(
+                role=role,
+                repo_id=repo_id or "",
+                prompt="ADI model connectivity check. Reply with a short confirmation.",
+                prompt_path=run_dir / "prompt.md",
+                worktree_path=worktree_path,
+                run_dir=run_dir,
+                attempt=1,
+            )
+
+        payload.update(
+            {
+                "ready": result.success,
+                "success": result.success,
+                "command": result.command,
+                "returncode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "response": result.response,
+            }
+        )
+        return payload

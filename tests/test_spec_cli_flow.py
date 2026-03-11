@@ -327,6 +327,61 @@ def test_spec_run_stops_when_policy_requires_manual_approval(
     assert any("manual decision" in reason.lower() for reason in payload["safety_reasons"])
 
 
+def test_spec_delete_removes_linked_tasks_and_runs(tmp_path: Path, monkeypatch, capsys) -> None:
+    adi_home = tmp_path / ".adi-home"
+    monkeypatch.setenv("ADI_HOME", str(adi_home))
+
+    repo_path = tmp_path / "DeleteSpecRepo"
+    _init_git_repo(repo_path)
+
+    assert main(["repo", "init", "--path", str(repo_path)]) == 0
+    repo_id = load_yaml(capsys.readouterr().out)["repo"]["id"]
+
+    assert main(["repo", "explore", "--repo", repo_id]) == 0
+    capsys.readouterr()
+
+    assert (
+        main(
+            [
+                "spec",
+                "create",
+                "--repo",
+                repo_id,
+                "--title",
+                "Delete me",
+                "--id",
+                "SP-DEL",
+                "--execution-mode",
+                "manual",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    assert main(["spec", "analyze", "SP-DEL"]) == 0
+    capsys.readouterr()
+    assert main(["spec", "decompose", "SP-DEL"]) == 0
+    decompose_payload = load_yaml(capsys.readouterr().out)
+    generated_ids = [item["id"] for item in decompose_payload["generated_tasks"]]
+
+    spec_path = adi_home / "repos" / repo_id / "specs" / "SP-DEL.md"
+    assert spec_path.exists()
+    assert any((adi_home / "repos" / repo_id / "tasks" / f"{task_id}.md").exists() for task_id in generated_ids)
+    assert any(path.is_dir() for path in (adi_home / "runs").iterdir())
+
+    assert main(["spec", "delete", "SP-DEL"]) == 0
+    delete_payload = load_yaml(capsys.readouterr().out)
+    assert delete_payload["deleted"] is True
+    assert sorted(delete_payload["deleted_task_ids"]) == sorted(generated_ids)
+
+    assert not spec_path.exists()
+    for task_id in generated_ids:
+        assert not (adi_home / "repos" / repo_id / "tasks" / f"{task_id}.md").exists()
+    assert not any(path.is_dir() for path in (adi_home / "runs").iterdir())
+    assert main(["spec", "status", "SP-DEL"]) == 1
+
+
 def test_spec_repos_lists_detected_affected_repos(tmp_path: Path, monkeypatch, capsys) -> None:
     adi_home = tmp_path / ".adi-home"
     monkeypatch.setenv("ADI_HOME", str(adi_home))

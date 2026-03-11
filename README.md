@@ -38,6 +38,26 @@ python -m pip install -e '.[dev]'
 
 If you use `zsh`, keep the quotes around `'.[dev]'` so the shell does not treat it as a glob pattern.
 
+## Claude Code Setup
+
+ADI can use Claude Code as its shell-backed model runtime.
+
+Install and authenticate Claude Code:
+
+```bash
+npm install -g @anthropic-ai/claude-code
+claude
+```
+
+Then copy the example model config:
+
+```bash
+cp /Users/jpshook/Code/agentic-dev-interface/examples/config/models.yaml ~/.adi/config/models.yaml
+adi system model
+```
+
+The example config uses Claude Code in non-interactive mode for the `implementer` and `reviewer` roles.
+
 ## CLI
 
 ```bash
@@ -45,10 +65,12 @@ adi repo init --path /absolute/path/to/repo
 adi repo explore --repo <repo-id-or-name>
 adi repo info --repo <repo-id-or-name>
 adi repo doctor --repo <repo-id-or-name>
+adi repo delete --repo <repo-id-or-name>
 adi repos list
 adi task list --repo <repo-id-or-name>
 adi task show <task-id>
 adi task approve <task-id>
+adi task delete <task-id>
 adi task run <task-id>
 adi task verify <task-id>
 adi backlog show --repo <repo-id-or-name>
@@ -57,10 +79,12 @@ adi spec create --repo <repo-id-or-name> --title "<title>" [--execution-mode man
 adi spec analyze <spec-id>
 adi spec decompose <spec-id>
 adi spec approve <spec-id>
+adi spec delete <spec-id>
 adi spec status <spec-id>
 adi spec repos <spec-id>
 adi spec run <spec-id>
 adi system status
+adi system model
 ```
 
 ## Agent Runtime (Phase 4)

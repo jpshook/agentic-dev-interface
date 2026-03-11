@@ -26,6 +26,10 @@ def register_task_commands(subparsers: argparse._SubParsersAction[argparse.Argum
     approve_parser.add_argument("task_id", help="Task id")
     approve_parser.set_defaults(handler=_handle_task_approve)
 
+    delete_parser = task_subparsers.add_parser("delete", help="Delete task and generated artifacts")
+    delete_parser.add_argument("task_id", help="Task id")
+    delete_parser.set_defaults(handler=_handle_task_delete)
+
     run_parser = task_subparsers.add_parser("run", help="Run task deterministically")
     run_parser.add_argument("task_id", help="Task id")
     run_parser.set_defaults(handler=_handle_task_run)
@@ -45,6 +49,10 @@ def _handle_task_show(args: argparse.Namespace) -> int:
 
 def _handle_task_approve(args: argparse.Namespace) -> int:
     return _run_with_errors(lambda service: service.approve_task(args.task_id))
+
+
+def _handle_task_delete(args: argparse.Namespace) -> int:
+    return _run_with_errors(lambda service: service.delete_task(args.task_id))
 
 
 def _handle_task_run(args: argparse.Namespace) -> int:

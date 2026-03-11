@@ -33,6 +33,10 @@ def register_spec_commands(subparsers: argparse._SubParsersAction[argparse.Argum
     approve_parser.add_argument("spec_id", help="Spec id")
     approve_parser.set_defaults(handler=_handle_spec_approve)
 
+    delete_parser = spec_subparsers.add_parser("delete", help="Delete spec and linked task artifacts")
+    delete_parser.add_argument("spec_id", help="Spec id")
+    delete_parser.set_defaults(handler=_handle_spec_delete)
+
     run_parser = spec_subparsers.add_parser("run", help="Run spec workflow and optional execution")
     run_parser.add_argument("spec_id", help="Spec id")
     run_parser.add_argument("--max-tasks", type=int, required=False, help="Max tasks to run")
@@ -74,6 +78,11 @@ def _handle_spec_decompose(args: argparse.Namespace) -> int:
 def _handle_spec_approve(args: argparse.Namespace) -> int:
     service = SpecService()
     return _run_with_errors(lambda: service.approve_spec(args.spec_id))
+
+
+def _handle_spec_delete(args: argparse.Namespace) -> int:
+    service = SpecService()
+    return _run_with_errors(lambda: service.delete_spec(args.spec_id))
 
 
 def _handle_spec_run(args: argparse.Namespace) -> int:

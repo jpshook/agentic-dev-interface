@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -12,7 +13,10 @@ from typing import Any
 from adi.engine.artifact_store import ArtifactDocument, ArtifactStore
 from adi.engine.config_loader import ConfigLoader
 from adi.engine.repo_explorer import RepoProfile, detect_repo_profile
+from adi.engine.yaml_utils import load_yaml
 from adi.models.repo import RepoArtifact
+from adi.services.spec_service import SpecService
+from adi.services.task_service import TaskService
 
 
 @dataclass(slots=True)
@@ -29,9 +33,16 @@ class RepoService:
         self,
         config_loader: ConfigLoader | None = None,
         artifact_store: ArtifactStore | None = None,
+        task_service: TaskService | None = None,
+        spec_service: SpecService | None = None,
     ) -> None:
         self.config_loader = config_loader or ConfigLoader()
         self.artifact_store = artifact_store or ArtifactStore()
+        self.task_service = task_service or TaskService(config_loader=self.config_loader)
+        self.spec_service = spec_service or SpecService(
+            config_loader=self.config_loader,
+            task_service=self.task_service,
+        )
 
     def init_repo(self, path: Path) -> dict[str, Any]:
         repo_root = path.expanduser().resolve()
@@ -202,6 +213,50 @@ class RepoService:
             "checks": [asdict(check) for check in checks],
         }
 
+    def delete_repo(self, repo_ref: str) -> dict[str, Any]:
+        entry = self._resolve_repo(repo_ref)
+        repo_id = str(entry["id"])
+        repo_state_dir = self.config_loader.repos_dir / repo_id
+
+        deleted_specs: list[str] = []
+        specs_dir = repo_state_dir / "specs"
+        if specs_dir.exists():
+            for path in sorted(specs_dir.glob("*.md")):
+                document = self.artifact_store.read(path)
+                spec_id = str(document.frontmatter.get("id", "")).strip()
+                if not spec_id:
+                    continue
+                self.spec_service.delete_spec(spec_id)
+                deleted_specs.append(spec_id)
+
+        deleted_tasks: list[str] = []
+        tasks_dir = repo_state_dir / "tasks"
+        if tasks_dir.exists():
+            for path in sorted(tasks_dir.glob("*.md")):
+                document = self.artifact_store.read(path)
+                task_id = str(document.frontmatter.get("id", "")).strip()
+                if not task_id:
+                    continue
+                self.task_service.delete_task(task_id)
+                deleted_tasks.append(task_id)
+
+        deleted_run_dirs = self._delete_repo_runs(repo_id)
+        self._delete_repo_worktrees(repo_id)
+
+        shutil.rmtree(repo_state_dir, ignore_errors=True)
+
+        repos = [repo for repo in self.config_loader.load_repos_registry() if str(repo.get("id", "")) != repo_id]
+        self.config_loader.save_repos_registry(repos)
+
+        return {
+            "repo": entry,
+            "deleted": True,
+            "deleted_spec_ids": deleted_specs,
+            "deleted_task_ids": deleted_tasks,
+            "deleted_run_dirs": deleted_run_dirs,
+            "deleted_repo_state_dir": str(repo_state_dir),
+        }
+
     def _resolve_repo(self, repo_ref: str) -> dict[str, Any]:
         repos = self.config_loader.load_repos_registry()
         for repo in repos:
@@ -300,6 +355,30 @@ class RepoService:
             ArtifactDocument(frontmatter=frontmatter, body="\n".join(body_lines) + "\n"),
         )
         return path
+
+    def _delete_repo_runs(self, repo_id: str) -> list[str]:
+        deleted: list[str] = []
+        if not self.config_loader.runs_dir.exists():
+            return deleted
+        for run_dir in self.config_loader.runs_dir.iterdir():
+            if not run_dir.is_dir():
+                continue
+            metadata_path = run_dir / "metadata.yaml"
+            if not metadata_path.exists():
+                continue
+            payload = load_yaml(metadata_path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                continue
+            if str(payload.get("repo_id", "")) != repo_id:
+                continue
+            shutil.rmtree(run_dir, ignore_errors=True)
+            deleted.append(str(run_dir))
+        return deleted
+
+    def _delete_repo_worktrees(self, repo_id: str) -> None:
+        effective = self.config_loader.load_effective_config(repo_id=repo_id)
+        worktree_root = Path(str(effective["adi"]["execution"]["worktree_root"])).expanduser()
+        shutil.rmtree(worktree_root / repo_id, ignore_errors=True)
 
     def _render_repo_summary(self, entry: dict[str, Any], profile: RepoProfile) -> str:
         lines = [

@@ -125,3 +125,57 @@ def test_task_cli_run_and_verify(tmp_path: Path, monkeypatch, capsys) -> None:
     assert len(run_dirs) >= 2
     assert any((path / "metadata.yaml").exists() for path in run_dirs)
     assert any((path / "verification.yaml").exists() for path in run_dirs)
+
+
+def test_task_delete_removes_task_runs_and_worktree(tmp_path: Path, monkeypatch, capsys) -> None:
+    adi_home = tmp_path / ".adi-home"
+    monkeypatch.setenv("ADI_HOME", str(adi_home))
+
+    repo_path = tmp_path / "DemoRepo"
+    _init_git_repo(repo_path)
+
+    assert main(["repo", "init", "--path", str(repo_path)]) == 0
+    repo_id = load_yaml(capsys.readouterr().out)["repo"]["id"]
+
+    loader = ConfigLoader(adi_home=adi_home)
+    loader.ensure_initialized()
+    (loader.config_dir / "adi.yaml").write_text(
+        dump_yaml(
+            {
+                "execution": {
+                    "worktree_root": str(tmp_path / "worktrees"),
+                    "default_timeout_seconds": 120,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert main(["repo", "explore", "--repo", repo_id]) == 0
+    capsys.readouterr()
+
+    store = ArtifactStore()
+    repo_md_path = adi_home / "repos" / repo_id / "repo.md"
+    store.update(repo_md_path, frontmatter_updates={"commands": {"test": "python3 -c 'print(1)'"}})
+
+    _write_task(adi_home, repo_id, "TK-DEL", "approved", ["test"])
+
+    assert main(["task", "run", "TK-DEL"]) == 0
+    run_payload = load_yaml(capsys.readouterr().out)
+
+    run_dir = Path(run_payload["run_dir"])
+    worktree_path = Path(run_payload["worktree"])
+    task_path = adi_home / "repos" / repo_id / "tasks" / "TK-DEL.md"
+
+    assert run_dir.exists()
+    assert worktree_path.exists()
+    assert task_path.exists()
+
+    assert main(["task", "delete", "TK-DEL"]) == 0
+    delete_payload = load_yaml(capsys.readouterr().out)
+    assert delete_payload["deleted"] is True
+
+    assert not task_path.exists()
+    assert not run_dir.exists()
+    assert not worktree_path.exists()
+    assert main(["task", "show", "TK-DEL"]) == 1

@@ -1,7 +1,11 @@
 models:
   implementer:
-    runtime: stub
+    runtime: shell
+    command: cat "{prompt_file}" | claude -p --output-format text --permission-mode acceptEdits --allowedTools "Read,Edit,MultiEdit,Write,Bash"
+    timeout_seconds: 1800
   reviewer:
-    runtime: stub
+    runtime: shell
+    command: cat "{prompt_file}" | claude -p --output-format text --allowedTools "Read"
+    timeout_seconds: 900
   verifier:
     runtime: stub

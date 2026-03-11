@@ -95,3 +95,45 @@ def test_repos_list_and_system_status(tmp_path: Path, monkeypatch, capsys) -> No
     assert status_payload["summary"]["repos_available"] == 2
     assert status_payload["summary"]["specs_total"] >= 1
     assert status_payload["summary"]["tasks_total"] >= 1
+
+
+def test_system_model_reports_stub_as_not_ready(tmp_path: Path, monkeypatch, capsys) -> None:
+    adi_home = tmp_path / ".adi-home"
+    monkeypatch.setenv("ADI_HOME", str(adi_home))
+
+    assert main(["system", "model"]) == 1
+    payload = load_yaml(capsys.readouterr().out)
+    assert payload["runtime"] == "stub"
+    assert payload["ready"] is False
+    assert payload["success"] is True
+
+
+def test_system_model_executes_shell_runtime(tmp_path: Path, monkeypatch, capsys) -> None:
+    adi_home = tmp_path / ".adi-home"
+    monkeypatch.setenv("ADI_HOME", str(adi_home))
+
+    from adi.engine.config_loader import ConfigLoader
+    from adi.engine.yaml_utils import dump_yaml
+
+    loader = ConfigLoader(adi_home=adi_home)
+    loader.ensure_initialized()
+    (loader.config_dir / "models.yaml").write_text(
+        dump_yaml(
+            {
+                "models": {
+                    "implementer": {
+                        "runtime": "shell",
+                        "command": "sh -c 'echo model-ok'",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert main(["system", "model"]) == 0
+    payload = load_yaml(capsys.readouterr().out)
+    assert payload["runtime"] == "shell"
+    assert payload["ready"] is True
+    assert payload["success"] is True
+    assert "model-ok" in payload["stdout"]

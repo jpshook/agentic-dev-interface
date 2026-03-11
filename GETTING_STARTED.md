@@ -29,6 +29,55 @@ Verify the CLI is available:
 adi --help
 ```
 
+Verify whether a real model runtime is configured:
+
+```bash
+adi system model
+```
+
+If this reports `runtime: stub`, ADI is installed but not yet connected to a real model command.
+
+## Configure Claude Code
+
+If you want ADI to use Claude Code as the model runtime:
+
+1. Install Claude Code
+2. Authenticate Claude Code
+3. Copy a `models.yaml` that uses the Claude CLI in non-interactive mode
+4. Verify it with `adi system model`
+
+Install Claude Code:
+
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+Then authenticate once:
+
+```bash
+claude
+```
+
+ADI reads model config from `~/.adi/config/models.yaml` by default. Copy the example file:
+
+```bash
+cp /Users/jpshook/Code/agentic-dev-interface/examples/config/models.yaml ~/.adi/config/models.yaml
+```
+
+The example config uses Claude Code for `implementer` and `reviewer` via `claude -p`.
+
+Verify that the model command works:
+
+```bash
+adi system model
+```
+
+If you want to check a specific role:
+
+```bash
+adi system model --role implementer
+```
+
 ## Understand Where ADI Stores Data
 
 ADI writes its state to `~/.adi` by default.
@@ -193,7 +242,7 @@ Start from the example config:
 cp examples/config/models.yaml ~/.adi/config/models.yaml
 ```
 
-Then update it with the runtime and command you want ADI to invoke.
+The checked-in example is configured for Claude Code. If you want a different runtime, update `models.yaml` with the command ADI should invoke.
 
 Related example configs:
 
@@ -201,6 +250,8 @@ Related example configs:
 - `examples/config/models.yaml`
 - `examples/config/policies.yaml`
 - `examples/config/repos.yaml`
+
+The Claude Code example uses `claude -p` in non-interactive mode and reads the generated prompt from `{prompt_file}`.
 
 ## Common First-Run Checks
 

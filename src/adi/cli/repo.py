@@ -30,6 +30,10 @@ def register_repo_commands(subparsers: argparse._SubParsersAction[argparse.Argum
     doctor_parser.add_argument("--repo", required=True, help="Repo id or name")
     doctor_parser.set_defaults(handler=_handle_repo_doctor)
 
+    delete_parser = repo_subparsers.add_parser("delete", help="Delete repository artifacts recursively")
+    delete_parser.add_argument("--repo", required=True, help="Repo id or name")
+    delete_parser.set_defaults(handler=_handle_repo_delete)
+
 
 def _handle_repo_init(args: argparse.Namespace) -> int:
     service = RepoService()
@@ -55,6 +59,13 @@ def _handle_repo_info(args: argparse.Namespace) -> int:
 def _handle_repo_doctor(args: argparse.Namespace) -> int:
     service = RepoService()
     result = service.repo_doctor(args.repo)
+    _print_yaml(result)
+    return 0
+
+
+def _handle_repo_delete(args: argparse.Namespace) -> int:
+    service = RepoService()
+    result = service.delete_repo(args.repo)
     _print_yaml(result)
     return 0
 

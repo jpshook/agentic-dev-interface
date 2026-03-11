@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ from adi.engine.artifact_store import ArtifactDocument, ArtifactStore
 from adi.engine.config_loader import ConfigLoader
 from adi.engine.run_manager import RunManager
 from adi.engine.spec_planner import SpecAnalysis, SpecPlanner
+from adi.engine.yaml_utils import load_yaml
 from adi.engine.policy_evaluator import PolicyEvaluator
 from adi.models.spec import (
     SPEC_EXECUTION_MODES,
@@ -297,6 +299,32 @@ class SpecService:
             "spec_id": spec.id,
             "status": updated_spec.frontmatter["status"],
             "approved_task_ids": approved_task_ids,
+        }
+
+    def delete_spec(self, spec_id: str) -> dict[str, Any]:
+        record = self._resolve_spec(spec_id)
+        spec = SpecArtifact.from_frontmatter(record["document"].frontmatter)
+
+        linked = self._linked_tasks(spec.id)
+        deleted_tasks: list[dict[str, Any]] = []
+        for item in linked:
+            task_id = str(item["document"].frontmatter.get("id", "")).strip()
+            if not task_id:
+                continue
+            deleted_tasks.append(self.task_service.delete_task(task_id))
+
+        deleted_run_dirs = self._delete_spec_runs(spec.id)
+
+        if record["path"].exists():
+            record["path"].unlink()
+
+        return {
+            "spec_id": spec.id,
+            "repo_id": spec.repo_id,
+            "deleted": True,
+            "path": str(record["path"]),
+            "deleted_task_ids": [str(item["task_id"]) for item in deleted_tasks],
+            "deleted_run_dirs": deleted_run_dirs,
         }
 
     def spec_status(self, spec_id: str) -> dict[str, Any]:
@@ -677,6 +705,26 @@ class SpecService:
                     continue
                 linked.append({"repo": repo, "path": path, "document": document})
         return linked
+
+    def _delete_spec_runs(self, spec_id: str) -> list[str]:
+        deleted: list[str] = []
+        if not self.config_loader.runs_dir.exists():
+            return deleted
+
+        for run_dir in self.config_loader.runs_dir.iterdir():
+            if not run_dir.is_dir():
+                continue
+            metadata_path = run_dir / "metadata.yaml"
+            if not metadata_path.exists():
+                continue
+            payload = load_yaml(metadata_path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                continue
+            if str(payload.get("spec_id", "")) != spec_id:
+                continue
+            shutil.rmtree(run_dir, ignore_errors=True)
+            deleted.append(str(run_dir))
+        return deleted
 
     def _repo_frontmatter(self, repo_id: str) -> dict[str, Any]:
         path = self.config_loader.repos_dir / repo_id / "repo.md"

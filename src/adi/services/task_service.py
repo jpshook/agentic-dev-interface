@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -17,6 +18,7 @@ from adi.engine.prompt_builder import PromptBuilder
 from adi.engine.run_manager import RunContext, RunManager
 from adi.engine.verifier import Verifier
 from adi.engine.worktree_manager import WorktreeManager
+from adi.engine.yaml_utils import load_yaml
 from adi.models.policy import PolicyDecision
 from adi.models.task import TaskArtifact, assert_task_transition, validate_task_frontmatter
 
@@ -84,6 +86,25 @@ class TaskService:
             "task_id": task_id,
             "status": updated.frontmatter["status"],
             "path": str(record.path),
+        }
+
+    def delete_task(self, task_id: str) -> dict[str, Any]:
+        record = self._resolve_task(task_id)
+        task = TaskArtifact.from_frontmatter(record.document.frontmatter)
+
+        run_dirs = self._delete_task_runs(task_id=task.id, repo_id=task.repo_id)
+        worktree_deleted = self._delete_task_worktree(task=task, repo_root=Path(str(record.repo["root"])).resolve())
+
+        if record.path.exists():
+            record.path.unlink()
+
+        return {
+            "task_id": task.id,
+            "repo_id": task.repo_id,
+            "deleted": True,
+            "path": str(record.path),
+            "deleted_run_dirs": run_dirs,
+            "deleted_worktree": worktree_deleted,
         }
 
     def run_task(self, task_id: str) -> dict[str, Any]:
@@ -513,6 +534,71 @@ class TaskService:
 
     def _reload_frontmatter(self, path: Path) -> dict[str, Any]:
         return self.artifact_store.read(path).frontmatter
+
+    def _delete_task_runs(self, *, task_id: str, repo_id: str) -> list[str]:
+        deleted: list[str] = []
+        for run_dir in self._matching_run_dirs(task_id=task_id, repo_id=repo_id):
+            shutil.rmtree(run_dir, ignore_errors=True)
+            deleted.append(str(run_dir))
+        return deleted
+
+    def _matching_run_dirs(self, *, task_id: str, repo_id: str) -> list[Path]:
+        matches: list[Path] = []
+        if not self.config_loader.runs_dir.exists():
+            return matches
+
+        for run_dir in self.config_loader.runs_dir.iterdir():
+            if not run_dir.is_dir():
+                continue
+            metadata_path = run_dir / "metadata.yaml"
+            if not metadata_path.exists():
+                continue
+            payload = load_yaml(metadata_path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                continue
+            if str(payload.get("task_id", "")) != task_id:
+                continue
+            if str(payload.get("repo_id", "")) != repo_id:
+                continue
+            matches.append(run_dir)
+        return matches
+
+    def _delete_task_worktree(self, *, task: TaskArtifact, repo_root: Path) -> bool:
+        effective = self.config_loader.load_effective_config(repo_id=task.repo_id)
+        worktree_root = Path(str(effective["adi"]["execution"]["worktree_root"])).expanduser()
+        manager = WorktreeManager(worktree_root)
+        worktree_path = manager.path_for_task(task.repo_id, task.id)
+        branch = manager.branch_for_task(task.id)
+
+        if worktree_path.exists():
+            result = subprocess.run(
+                ["git", "-C", str(repo_root), "worktree", "remove", "--force", str(worktree_path)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0 and worktree_path.exists():
+                shutil.rmtree(worktree_path, ignore_errors=True)
+
+        subprocess.run(
+            ["git", "-C", str(repo_root), "branch", "-D", branch],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self._remove_empty_parents(worktree_path, stop_at=worktree_root)
+        return not worktree_path.exists()
+
+    def _remove_empty_parents(self, path: Path, *, stop_at: Path) -> None:
+        current = path.parent
+        stop = stop_at.resolve()
+        while current.exists() and current != stop:
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
 
     def _utc_now(self) -> str:
         return datetime.now(UTC).replace(microsecond=0).isoformat()
